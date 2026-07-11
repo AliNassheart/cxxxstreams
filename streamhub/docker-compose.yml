@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: streamhub
+      POSTGRES_PASSWORD: streamhub
+      POSTGRES_DB: streamhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CLIENT_URL: http://localhost:5173
+      DATABASE_URL: postgres://streamhub:streamhub@postgres:5432/streamhub
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_access_secret_change_me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
+      HLS_BASE_URL: http://localhost:8080/hls
+    ports:
+      - "4000:4000"
+
+  rtmp:
+    image: tiangolo/nginx-rtmp
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./backend/nginx-rtmp/nginx.conf:/etc/nginx/nginx.conf:ro
+      - hls-data:/tmp/hls
+    ports:
+      - "1935:1935" # RTMP ingest (OBS)
+      - "8080:8080" # HLS playback
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+      VITE_SOCKET_URL: http://localhost:4000
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:
+  hls-data:
