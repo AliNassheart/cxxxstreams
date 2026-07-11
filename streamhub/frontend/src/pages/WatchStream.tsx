@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../services/api';
-import { getSocket, connectSocket } from '../services/socket';
+import { connectSocket } from '../services/socket';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { LiveChat } from '../components/LiveChat';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -9,27 +9,57 @@ import type { Stream } from '../types';
 
 export default function WatchStream() {
   const { id } = useParams<{ id: string }>();
+
   const [stream, setStream] = useState<Stream | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch stream data
   useEffect(() => {
     if (!id) return;
+
+    setLoading(true);
+
     api
       .get(`/streams/${id}`)
-      .then(({ data }) => setStream(data.stream))
-      .finally(() => setLoading(false));
+      .then(({ data }) => {
+        setStream(data.stream);
+      })
+      .catch((error) => {
+        console.error('Failed to load stream:', error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [id]);
 
+  // Listen for live status updates
   useEffect(() => {
     if (!id) return;
+
     const socket = connectSocket();
-    const onStatus = (payload: { streamId: string; status: Stream['status']; hlsUrl?: string }) => {
+
+    const onStatus = (payload: {
+      streamId: string;
+      status: Stream['status'];
+      hlsUrl?: string;
+    }) => {
       if (payload.streamId !== id) return;
-      setStream((prev) => (prev ? { ...prev, status: payload.status, hls_url: payload.hlsUrl ?? prev.hls_url } : prev));
+
+      setStream((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: payload.status,
+              hls_url: payload.hlsUrl ?? prev.hls_url,
+            }
+          : prev
+      );
     };
-    getSocket().on('stream:status', onStatus);
+
+    socket.on('stream:status', onStatus);
+
     return () => {
-      getSocket().off('stream:status', onStatus);
+      socket.off('stream:status', onStatus);
     };
   }, [id]);
 
@@ -44,7 +74,9 @@ export default function WatchStream() {
   if (!stream) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-        <p className="font-display text-lg text-ink-300">Stream not found</p>
+        <p className="font-display text-lg text-ink-300">
+          Stream not found
+        </p>
       </div>
     );
   }
@@ -54,10 +86,22 @@ export default function WatchStream() {
   return (
     <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px] lg:px-8">
       <div>
-        <VideoPlayer src={isLive ? stream.hls_url : null} poster={stream.thumbnail_url} isLive={isLive} />
+        <VideoPlayer
+          src={isLive ? stream.hls_url : null}
+          poster={stream.thumbnail_url}
+          isLive={isLive}
+        />
+
         <div className="mt-4">
-          <h1 className="font-display text-xl font-semibold text-ink-100">{stream.title}</h1>
-          {stream.description && <p className="mt-2 text-sm text-ink-500">{stream.description}</p>}
+          <h1 className="font-display text-xl font-semibold text-ink-100">
+            {stream.title}
+          </h1>
+
+          {stream.description && (
+            <p className="mt-2 text-sm text-ink-500">
+              {stream.description}
+            </p>
+          )}
         </div>
       </div>
 
