@@ -2,9 +2,10 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Login() {
-  const { login } = useAuth();
+export default function Register() {
+  const { register } = useAuth();
   const navigate = useNavigate();
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -15,10 +16,17 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await register(username, email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Unable to sign in.');
+      const backendError = err?.response?.data?.error;
+      if (backendError) {
+        setError(backendError);
+      } else if (err?.code === 'ERR_NETWORK' || err?.message?.includes('Network Error')) {
+        setError('Unable to connect to server. Please check your connection.');
+      } else {
+        setError('Unable to create account. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -27,10 +35,21 @@ export default function Login() {
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
       <div className="card w-full max-w-sm animate-fade-up p-7">
-        <h1 className="font-display text-xl font-semibold text-ink-100">Welcome back</h1>
-        <p className="mt-1 text-sm text-ink-500">Sign in to your StreamHub account.</p>
+        <h1 className="font-display text-xl font-semibold text-ink-100">Create your account</h1>
+        <p className="mt-1 text-sm text-ink-500">New accounts start as viewers. Ask an admin for streamer access.</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-300">Username</label>
+            <input
+              required
+              minLength={3}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="input-field"
+              placeholder="yourname"
+            />
+          </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-300">Email</label>
             <input
@@ -47,24 +66,25 @@ export default function Login() {
             <input
               type="password"
               required
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input-field"
-              placeholder="••••••••"
+              placeholder="At least 8 characters"
             />
           </div>
 
           {error && <p className="text-xs text-live-400">{error}</p>}
 
           <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-xs text-ink-500">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-signal-400 hover:text-signal-300">
-            Create one
+          Already have an account?{' '}
+          <Link to="/login" className="font-medium text-signal-400 hover:text-signal-300">
+            Sign in
           </Link>
         </p>
       </div>
